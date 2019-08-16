@@ -1,7 +1,13 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 
-const LASTFM = "http://ws.audioscrobbler.com/2.0/?method=chart.gettopartists&api_key=c68ea49b4e861204b0e6b6607a77c542&format=json";
+const throttleActions = require('./throttleActions');
+
+const LAST_FM_LIMIT = 50;
+const PARALLEL_DEGY_REQUEST_LIMIT = 10;
+const TOP_VALUE_ARTIST_LIMIT = 10;
+
+const LASTFM = "http://ws.audioscrobbler.com/2.0/?method=chart.gettopartists&api_key=c68ea49b4e861204b0e6b6607a77c542&format=json&limit=" + LAST_FM_LIMIT;
 const DEGY = "https://www.degy.com/artistsearch/?wpv_post_search=";
 
 const fetchTopArtists = async () => {
@@ -16,7 +22,12 @@ const fetchTopArtists = async () => {
 };
 
 const fetchArtistCost = async artistName => {
-    const result = await axios.get(DEGY + artistName);
+    let result;
+    try {
+        result = await axios.get(DEGY + artistName);
+    } catch (error) {
+        return false
+    }
     const $ = cheerio.load(result.data);
 
     const matchingArtists = $('#customscroller').find('tr');
@@ -43,7 +54,7 @@ const moneyToInt = money => parseInt(money.replace(/\,|\$/g,''));
 const main = async () => {
     const topArtists = await fetchTopArtists();
 
-    const valueArtists = await Promise.all(topArtists.map(async lastFmArtist => {
+    const valueArtistsPromises = topArtists.map(async lastFmArtist => {
         const degyArtist = await fetchArtistCost(lastFmArtist.lastFmName);
         if (!degyArtist) return false;
 
@@ -56,11 +67,13 @@ const main = async () => {
             minValue,
             maxValue
         }
-    }));
+    });
+
+    const valueArtists = await throttleActions(valueArtistsPromises, PARALLEL_DEGY_REQUEST_LIMIT);
 
     const sortedValueArtists = valueArtists.filter(e => !!e).sort((a, b) => b.maxValue - a.maxValue);
 
-    console.log(sortedValueArtists);
+    console.log(sortedValueArtists.splice(0,TOP_VALUE_ARTIST_LIMIT));
 }
 
 main();
