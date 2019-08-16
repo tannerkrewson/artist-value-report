@@ -37,14 +37,26 @@ const fetchArtistCost = async artistName => {
     const firstArtist = matchingArtists[0];
     const firstArtistColumns = firstArtist.children;
 
+    const degyName = $(firstArtistColumns[0]).text();
+
+    if (!isSameArtist(artistName, degyName)) return false;
+
     const minPrice = moneyToInt($(firstArtistColumns[1]).text());
     const maxPrice = moneyToInt($(firstArtistColumns[2]).text());
 
     return {
-        degyName: $(firstArtistColumns[0]).text(),
+        degyName,
         minPrice,
         maxPrice
     };
+};
+
+const isSameArtist = (a, b) => {
+    // removes not alphanum characters and lower case
+    const x = a.replace(/[^0-9a-z]/gi, '').toLowerCase();
+    const y = b.replace(/[^0-9a-z]/gi, '').toLowerCase();
+
+    return x === y;
 };
 
 // removes , and $
