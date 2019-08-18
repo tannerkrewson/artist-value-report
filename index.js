@@ -3,9 +3,9 @@ const cheerio = require('cheerio');
 
 const throttleActions = require('./throttleActions');
 
-const LAST_FM_LIMIT = 50;
-const PARALLEL_DEGY_REQUEST_LIMIT = 10;
-const TOP_VALUE_ARTIST_LIMIT = 10;
+const LAST_FM_LIMIT = 100;
+const PARALLEL_DEGY_REQUEST_LIMIT = 5;
+const TOP_VALUE_ARTIST_LIMIT = 20;
 
 const LASTFM = "http://ws.audioscrobbler.com/2.0/?method=chart.gettopartists&api_key=c68ea49b4e861204b0e6b6607a77c542&format=json&limit=" + LAST_FM_LIMIT;
 const DEGY = "https://www.degy.com/artistsearch/?wpv_post_search=";
@@ -26,7 +26,7 @@ const fetchArtistCost = async artistName => {
     try {
         result = await axios.get(DEGY + artistName);
     } catch (error) {
-        return false
+        return false;
     }
     const $ = cheerio.load(result.data);
 
@@ -64,21 +64,36 @@ const isSameArtist = (a, b) => {
 const moneyToInt = money => parseInt(money.replace(/\,|\$/g,''));
 
 const main = async () => {
+    console.log('Getting top', LAST_FM_LIMIT, 'artists from Last.fm...');
+    
     const topArtists = await fetchTopArtists();
-
-    const valueArtistsPromises = topArtists.map(async lastFmArtist => {
-        const degyArtist = await fetchArtistCost(lastFmArtist.lastFmName);
-        if (!degyArtist) return false;
-
-        const minValue = lastFmArtist.listeners / degyArtist.minPrice;
-        const maxValue = lastFmArtist.listeners / degyArtist.maxPrice;
-
-        return {
-            ...lastFmArtist,
-            ...degyArtist,
-            minValue,
-            maxValue
-        }
+    console.log('Received top', topArtists.length, 'artists.');
+    
+    let successCount = 0;
+    let failCount = 0;
+    let valueArtistsPromises = [];
+    
+    topArtists.forEach(lastFmArtist => {
+        valueArtistsPromises.push(async () => {
+            console.log(successCount + failCount);
+            
+            const degyArtist = await fetchArtistCost(lastFmArtist.lastFmName);
+            if (!degyArtist) {
+                failCount++;
+                return false;
+            }
+            successCount++;
+    
+            const minValue = lastFmArtist.listeners / degyArtist.minPrice;
+            const maxValue = lastFmArtist.listeners / degyArtist.maxPrice;
+    
+            return {
+                ...lastFmArtist,
+                ...degyArtist,
+                minValue,
+                maxValue
+            };
+        });
     });
 
     const valueArtists = await throttleActions(valueArtistsPromises, PARALLEL_DEGY_REQUEST_LIMIT);
@@ -86,6 +101,8 @@ const main = async () => {
     const sortedValueArtists = valueArtists.filter(e => !!e).sort((a, b) => b.maxValue - a.maxValue);
 
     console.log(sortedValueArtists.splice(0,TOP_VALUE_ARTIST_LIMIT));
+    console.log('degy success', successCount);
+    console.log('degy fail', failCount);
 }
 
 main();

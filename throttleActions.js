@@ -18,17 +18,17 @@ function throttleActions (listOfCallableActions, limit) {
     // given time. Because we return doNextAction, the Promise chain continues as
     // long as there's an action left in the list.
     function doNextAction() {
-        if (i < listOfCallableActions.length) {
-            // Save the current value of i, so we can put the result in the right place
-            let actionIndex = i++;
-            let nextAction = listOfCallableActions[actionIndex];
-            
-            return nextAction
-                .then(result => {  // Save results to the correct array index.
+        if (i >= listOfCallableActions.length) return;
+        
+        // Save the current value of i, so we can put the result in the right place
+        let actionIndex = i++;
+        let nextAction = listOfCallableActions[actionIndex];
+        
+        return Promise.resolve(nextAction())
+            .then(result => {
+                // Save results to the correct array index.
                 resultArray[actionIndex] = result;
-                return;
-                }).then(doNextAction);
-        }
+            }).then(doNextAction);
     }
   
     // Now start up the original <limit> number of promises.
