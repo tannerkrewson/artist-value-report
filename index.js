@@ -1,14 +1,14 @@
 const axios = require('axios');
-const cheerio = require('cheerio');
 
 const throttleActions = require('./throttleActions');
 
-const LAST_FM_LIMIT = 100;
-const PARALLEL_DEGY_REQUEST_LIMIT = 5;
-const TOP_VALUE_ARTIST_LIMIT = 20;
+const LAST_FM_LIMIT = 999;
+const PARALLEL_DEGY_REQUEST_LIMIT = 50;
+const TOP_VALUE_ARTIST_LIMIT = 200;
+const MAX_MIN_PRICE = 100001;
 
 const LASTFM = "http://ws.audioscrobbler.com/2.0/?method=chart.gettopartists&api_key=c68ea49b4e861204b0e6b6607a77c542&format=json&limit=" + LAST_FM_LIMIT;
-const DEGY = "https://www.degy.com/artistsearch/?wpv_post_search=";
+const DEGY = "https://portal.degy.com/ArtistSearch/ArtistSearchResult?page=0&artist=";
 
 const fetchTopArtists = async () => {
     const result = await axios.get(LASTFM);
@@ -28,21 +28,27 @@ const fetchArtistCost = async artistName => {
     } catch (error) {
         return false;
     }
-    const $ = cheerio.load(result.data);
 
-    const matchingArtists = $('#customscroller').find('tr');
-
-    if (matchingArtists.length === 0) return false;
+    const matchingArtists = result.data.data;
+    
+    if (matchingArtists.length === 0) {
+        return false;
+    }
 
     const firstArtist = matchingArtists[0];
-    const firstArtistColumns = firstArtist.children;
 
-    const degyName = $(firstArtistColumns[0]).text();
+    const degyName = firstArtist.artistName
 
-    if (!isSameArtist(artistName, degyName)) return false;
+    if (!isSameArtist(artistName, degyName)) {
+        return false;
+    }
 
-    const minPrice = moneyToInt($(firstArtistColumns[1]).text());
-    const maxPrice = moneyToInt($(firstArtistColumns[2]).text());
+    const minPrice = moneyToInt(firstArtist.minPrice);
+    const maxPrice = moneyToInt(firstArtist.maxPrice);
+
+    if (minPrice > MAX_MIN_PRICE || minPrice === 0) {
+        return false;
+    }
 
     return {
         degyName,
